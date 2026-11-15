@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>Kamery Ostravska</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#2a2f3a;--text:#e8eaef;--muted:#9aa3b2;--live:#e5484d;--snap:#f5a524;--link:#5b9cff;--acc:#3ecf8e}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+#map{position:fixed;inset:0;background:#0b0c0f}
+.leaflet-container{background:#0b0c0f}
+.place-lbl{pointer-events:none;width:0;height:0}
+.place-lbl span{position:absolute;color:#8d96a6;font-size:11px;white-space:nowrap;text-shadow:0 0 3px #0b0c0f,0 0 3px #0b0c0f;transform:translate(-50%,-50%)}
+.place-lbl.city span{font-size:16px;font-weight:700;color:#c9cfda;letter-spacing:.5px}
+.place-lbl.town span{font-size:13px;font-weight:600;color:#b3bbc8}
+.place-lbl.suburb span{font-size:11px;color:#7c8696;text-transform:uppercase;letter-spacing:.6px}
+.leaflet-control-attribution{background:rgba(15,17,21,.8)!important;color:var(--muted)!important;font-size:11px}
+.leaflet-control-attribution a{color:var(--muted)!important}
+.leaflet-bar a{background:var(--panel);color:var(--text);border-color:var(--line)}
+#top{position:fixed;z-index:1000;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;max-width:420px;display:flex;flex-direction:column;gap:8px}
+.card{background:rgba(23,26,33,.96);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+#brand{display:flex;align-items:center;gap:10px;padding:10px 12px}
+#brand h1{font-size:17px;margin:0;font-weight:650}
+#brand .count{margin-left:auto;color:var(--muted);font-size:13px}
+#search{width:100%;border:0;border-top:1px solid var(--line);background:transparent;color:var(--text);padding:12px;font-size:16px;outline:none;border-radius:0 0 14px 14px}
+#results{max-height:45vh;overflow:auto;display:none}
+#results.show{display:block}
+.res{display:flex;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line);cursor:pointer}
+.res:hover,.res:focus{background:#1f2430;outline:none}
+.res small{display:block;color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.dot.live{background:var(--live)}.dot.snap{background:var(--snap)}.dot.link{background:var(--link)}
+#filters{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);background:#11141a;border:1px solid var(--line);border-radius:20px;padding:5px 10px;cursor:pointer;user-select:none}
+.chip input{margin:0;accent-color:var(--acc)}
+.cam-pin{width:26px;height:26px;border-radius:50%;border:2px solid #0f1115;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.6);font-size:12px;color:#0f1115;font-weight:700}
+.cam-pin.live{background:var(--live);color:#fff}.cam-pin.snap{background:var(--snap)}.cam-pin.link{background:var(--link);color:#fff}
+.cam-pin.sel{outline:3px solid #fff}
+#viewer{position:fixed;z-index:1100;right:12px;top:12px;bottom:12px;width:min(760px,calc(100vw - 460px));display:none;flex-direction:column;overflow:hidden}
+#viewer.open{display:flex}
+#vhead{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-bottom:1px solid var(--line)}
+#vhead h2{font-size:18px;margin:0 0 4px}
+#vhead .meta{color:var(--muted);font-size:13px}
+#close{margin-left:auto;background:#232833;border:1px solid var(--line);color:var(--text);width:38px;height:38px;border-radius:10px;font-size:22px;cursor:pointer;flex:none}
+#stage{position:relative;flex:1;background:#000;display:grid;place-items:center;min-height:200px}
+#stage video,#stage img,#stage iframe{width:100%;height:100%;object-fit:contain;border:0;background:#000;display:block}
+#stage .msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;color:var(--muted)}
+#stage .msg a{color:var(--link)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:3px 8px;border-radius:6px}
+.badge.live{background:rgba(229,72,77,.15);color:#ff7a7e}.badge.snap{background:rgba(245,165,36,.15);color:#ffc35c}.badge.link{background:rgba(91,156,255,.15);color:#8fbaff}
+.badge.live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--live);animation:p 1.4s infinite}
+@keyframes p{50%{opacity:.25}}
+#vfoot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+#vfoot .info{color:var(--muted);font-size:13px;margin-right:auto}
+.btn{background:#232833;border:1px solid var(--line);color:var(--text);padding:9px 14px;border-radius:10px;font-size:14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#06281a;font-weight:650}
+#viewer.pseudo-fs{inset:0;width:auto;height:auto;border-radius:0;z-index:2000}
+#viewer.pseudo-fs #vhead,#viewer.pseudo-fs #vfoot .info,#viewer.pseudo-fs #vsrc{display:none}
+@media (max-width:900px){
+  #top{max-width:none}
+  #viewer{left:0;right:0;bottom:0;top:auto;width:auto;height:min(78vh,620px);border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+  #vhead h2{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div id="map" aria-label="Mapa kamer"></div>
+
+<div id="top">
+  <div class="card">
+    <div id="brand"><h1>📹 Kamery Ostravska</h1><span class="count" id="count"></span></div>
+    <div id="filters">
+      <label class="chip"><input type="checkbox" id="fLive" checked><span class="dot live"></span><span class="lbl">Živě</span></label>
+      <label class="chip"><input type="checkbox" id="fSnap" checked><span class="dot snap"></span><span class="lbl">Snímky</span></label>
+      <label class="chip"><input type="checkbox" id="fLink"><span class="dot link"></span><span class="lbl">Pouze u provozovatele</span></label>
+    </div>
+    <input id="search" type="search" placeholder="Hledat město nebo kameru… (např. Havířov)" autocomplete="off" aria-label="Hledat">
+    <div id="results" role="listbox"></div>
+  </div>
+</div>
+
+<section id="viewer" class="card" aria-live="polite">
+  <div id="vhead">
+    <div>
+      <h2 id="vtitle"></h2>
+      <div class="meta"><span id="vbadge" class="badge"></span> <span id="vmeta"></span></div>
+    </div>
+    <button id="close" title="Zavřít (Esc)" aria-label="Zavřít">×</button>
+  </div>
+  <div id="stage"></div>
+  <div id="vfoot">
+    <span class="info" id="vinfo"></span>
+    <a class="btn" id="vsrc" target="_blank" rel="noopener">Stránka provozovatele ↗</a>
+    <button class="btn primary" id="fs">⛶ Celá obrazovka</button>
+  </div>
+</section>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/Leaflet.VectorGrid.bundled.min.js"></script>
+<script src="vendor/hls.min.js"></script>
+<script>
+(async function(){
+  const isHttps = location.protocol === 'https:';
+  const data = await fetch('kamery.json').then(r=>r.json());
+  // live = živé video, snap = obnovovaný snímek, link = jen u provozovatele
+  const cams = data.kamery.map(c=>{
+    let mode = c.typ==='snimek' ? 'snap' : (c.typ==='odkaz' ? 'link' : 'live');
+    if (c.jenHttp && isHttps) mode = 'link'; // nezabezpečený přenos nejde vložit do HTTPS stránky
+    return {...c, mode};
+  });
+  const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+
+  // Mapový podklad: vektorové dlaždice OpenStreetMap (OpenMapTiles/OpenFreeMap) uložené v projektu ve složce vt/
+  const map = L.map('map',{zoomControl:false,minZoom:8,maxZoom:17,maxBounds:[[49.3,17.4],[50.2,19.2]],preferCanvas:true}).setView([49.80,18.38],11);
+  L.control.zoom({position:'bottomleft'}).addTo(map);
+  const S = (o)=>Object.assign({fill:false,weight:1,opacity:1},o);
+  const roadW = {motorway:3,trunk:2.6,primary:2.2,secondary:1.8,tertiary:1.4,minor:.8,service:.5};
+  const roadC = {motorway:'#c98a3c',trunk:'#b5803e',primary:'#8c7a5a',secondary:'#6d6a60',tertiary:'#5a5d66',minor:'#3b404b',service:'#30343d'};
+  const none = [];
+  L.vectorGrid.protobuf('vt/{z}/{x}/{y}.pbf',{
+    maxNativeZoom:14, maxZoom:17, minZoom:8, interactive:false, bounds:[[49.50,17.80],[50.02,18.85]],
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">přispěvatelé OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a> · <a href="https://openmaptiles.org">OpenMapTiles</a>',
+    vectorTileLayerStyles:{
+      water: S({fill:true,fillColor:'#16324a',fillOpacity:1,color:'#16324a',weight:0}),
+      waterway: S({color:'#1f4b6e',weight:1.2}),
+      landcover: p => p.class==='wood'||p.class==='forest' ? S({fill:true,fillColor:'#15201a',fillOpacity:1,weight:0}) : none,
+      park: S({fill:true,fillColor:'#16221b',fillOpacity:1,weight:0}),
+      landuse: p => ['residential','suburb','neighbourhood'].includes(p.class) ? S({fill:true,fillColor:'#1a1d24',fillOpacity:1,weight:0})
+                 : ['industrial','commercial','retail','railway'].includes(p.class) ? S({fill:true,fillColor:'#1d1c22',fillOpacity:1,weight:0}) : none,
+      building: S({fill:true,fillColor:'#23262e',fillOpacity:1,weight:0}),
+      transportation: p => p.class==='rail' ? S({color:'#3a3f4a',weight:1,dashArray:'3,3'})
+                     : roadW[p.class] ? S({color:roadC[p.class],weight:roadW[p.class]}) : none,
+      boundary: p => p.admin_level<=2 ? S({color:'#7a5d8a',weight:1.5,dashArray:'6,4'}) : p.admin_level<=8 ? S({color:'#2f3340',weight:.8,dashArray:'2,3'}) : none,
+      aeroway: S({fill:true,fillColor:'#20232b',fillOpacity:1,color:'#2b2f39',weight:1}),
+      water_name:none, transportation_name:none, place:none, housenumber:none, poi:none, mountain_peak:none,
+      aerodrome_label:none, landuse_overlay:none, park_name:none
+    }
+  }).addTo(map);
+  // Názvy obcí a městských částí (mista.json – výtah z téhož podkladu)
+  const mista = await fetch('mista.json').then(r=>r.json());
+  const lblLayers = {city:L.layerGroup(), town:L.layerGroup(), village:L.layerGroup(), suburb:L.layerGroup(), quarter:L.layerGroup()};
+  mista.forEach(m=> L.marker([m.lat,m.lon],{interactive:false,keyboard:false,
+    icon:L.divIcon({className:'place-lbl '+m.c,html:'<span>'+m.n+'</span>',iconSize:null})}).addTo(lblLayers[m.c]));
+  const minZ = {city:8,town:9,village:12,suburb:12,quarter:14};
+  function lbl(){ const z=map.getZoom(); for(const k in lblLayers){ z>=minZ[k] ? lblLayers[k].addTo(map) : map.removeLayer(lblLayers[k]); } }
+  map.on('zoomend',lbl); lbl();
+
+  const groups = {live:L.layerGroup(), snap:L.layerGroup(), link:L.layerGroup()};
+  const icon = (m,sel) => L.divIcon({className:'',iconSize:[26,26],iconAnchor:[13,13],
+    html:`<div class="cam-pin ${m}${sel?' sel':''}">${m==='live'?'▶':m==='snap'?'◉':'↗'}</div>`});
+  cams.forEach(c=>{
+    c.marker = L.marker([c.lat,c.lon],{icon:icon(c.mode),title:c.nazev,keyboard:true})
+      .on('click',()=>openCam(c)).addTo(groups[c.mode]);
+  });
+  const fl = {live:fLive, snap:fSnap, link:fLink};
+  function applyFilters(){ for(const k in groups){ fl[k].checked ? groups[k].addTo(map) : map.removeLayer(groups[k]); } }
+  Object.values(fl).forEach(el=>el.addEventListener('change',applyFilters)); applyFilters();
+  const n = m => cams.filter(c=>c.mode===m).length;
+  count.textContent = `${cams.length} kamer`;
+  fLive.parentElement.querySelector('.lbl').textContent = `Živě (${n('live')})`;
+  fSnap.parentElement.querySelector('.lbl').textContent = `Snímky (${n('snap')})`;
+  fLink.parentElement.querySelector('.lbl').textContent = `Pouze u provozovatele (${n('link')})`;
+
+  // Lokální vyhledávání (bez diakritiky)
+  function renderResults(){
+    const q = norm(search.value.trim());
+    if(!q){ results.classList.remove('show'); results.innerHTML=''; return; }
+    const hits = cams.filter(c=>norm([c.nazev,c.mesto,c.cast,c.kategorie,c.provozovatel].join(' ')).includes(q)).slice(0,30);
+    results.innerHTML = hits.length ? hits.map(c=>`<div class="res" tabindex="0" data-id="${c.id}"><span class="dot ${c.mode}"></span><div>${c.nazev}<small>${c.mesto}${c.cast?' – '+c.cast:''} · ${c.provozovatel}</small></div></div>`).join('')
+      : '<div class="res" style="cursor:default">Nic nenalezeno</div>';
+    results.classList.add('show');
+  }
+  search.addEventListener('input',renderResults);
+  results.addEventListener('click',e=>{const el=e.target.closest('[data-id]'); if(el) pick(el.dataset.id);});
+  results.addEventListener('keydown',e=>{if(e.key==='Enter'){const el=e.target.closest('[data-id]'); if(el) pick(el.dataset.id);}});
+  search.addEventListener('keydown',e=>{if(e.key==='Enter'){const f=results.querySelector('[data-id]'); if(f) pick(f.dataset.id);}});
+  function pick(id){ const c=cams.find(x=>x.id===id); if(!c) return;
+    if(!fl[c.mode].checked){ fl[c.mode].checked=true; applyFilters(); }
+    results.classList.remove('show'); search.blur(); openCam(c); }
+
+  // Přehrávání – přenos se načte až po výběru a po zavření se zastaví
+  let current=null, hls=null, timer=null, active=null;
+  function stopAll(){
+    clearInterval(timer); timer=null;
+    if(hls){ hls.destroy(); hls=null; }
+    stage.querySelectorAll('video').forEach(v=>{ v.pause(); v.removeAttribute('src'); v.load(); });
+    stage.querySelectorAll('img,iframe').forEach(el=>{ el.src='about:blank'; });
+    stage.innerHTML='';
+  }
+  function fail(c,why){
+    stage.insertAdjacentHTML('beforeend',`<div class="msg"><div>${why}<br><br><a href="${c.stranka}" target="_blank" rel="noopener">Otevřít u provozovatele ↗</a></div></div>`);
+  }
+  const hhmmss = d => d.toLocaleTimeString('cs-CZ');
+  function openCam(c){
+    stopAll(); exitFs();
+    if(active) active.marker.setIcon(icon(active.mode));
+    active=c; c.marker.setIcon(icon(c.mode,true));
+    current=c.id; history.replaceState(null,'','#'+c.id);
+    vtitle.textContent=c.nazev;
+    vmeta.textContent=`${c.mesto}${c.cast?' – '+c.cast:''} · ${c.provozovatel}`;
+    vsrc.href=c.stranka;
+    vbadge.className='badge '+c.mode;
+    vbadge.textContent={live:'Živě',snap:'Obnovovaný snímek',link:'Pouze u provozovatele'}[c.mode];
+    vinfo.textContent='';
+    viewer.classList.add('open');
+    fs.style.display = c.mode==='link' ? 'none' : '';
+    const id=c.id;
+    if(c.mode==='link'){
+      stage.innerHTML=`<div class="msg"><div>Tento přenos lze sledovat jen na stránce provozovatele${c.jenHttp&&isHttps?' (nezabezpečený přenos nejde vložit do HTTPS stránky)':''}.<br><br><a class="btn primary" href="${c.stranka}" target="_blank" rel="noopener">Otevřít kameru ↗</a></div></div>`;
+    } else if(c.typ==='hls'){
+      const v=document.createElement('video');
+      v.muted=true; v.autoplay=true; v.controls=true; v.playsInline=true; v.setAttribute('playsinline','');
+      stage.appendChild(v);
+      if(window.Hls && Hls.isSupported()){
+        hls=new Hls({liveSyncDurationCount:2}); hls.loadSource(c.zdroj); hls.attachMedia(v);
+        hls.on(Hls.Events.ERROR,(e,d)=>{ if(d.fatal && current===id){ hls.destroy(); hls=null; fail(c,'Přenos se nepodařilo načíst.'); } });
+      } else if(v.canPlayType('application/vnd.apple.mpegurl')){ v.src=c.zdroj; }   // iPhone Safari
+      else { fail(c,'Prohlížeč nepodporuje HLS video.'); }
+      v.play().catch(()=>{});
+      v.addEventListener('playing',()=>{ if(current===id) vinfo.textContent='Video běží'; },{once:true});
+    } else if(c.typ==='mjpeg' || c.typ==='snimek'){
+      const img=new Image(); img.alt=c.nazev; stage.appendChild(img);
+      let ok=false;
+      img.onload=()=>{ if(current!==id) return; ok=true; vinfo.textContent = c.typ==='snimek' ? 'Snímek načten v '+hhmmss(new Date())+' · obnova každých '+(c.interval||10)+' s' : 'Živý přenos (MJPEG)'; };
+      img.onerror=()=>{ if(current===id && !ok){ img.remove(); fail(c,'Obraz kamery je teď nedostupný.'); } };
+      const url = () => c.typ==='snimek' ? c.zdroj+(c.zdroj.includes('?')?'&':'?')+'t='+Date.now() : c.zdroj;
+      img.src=url();
+      if(c.typ==='snimek'){
+        timer=setInterval(()=>{ const nimg=new Image(); nimg.onload=()=>{ if(current===id) img.src=nimg.src; }; nimg.src=url(); }, (c.interval||10)*1000);
+      }
+    } else if(c.typ==='iframe'){
+      const f=document.createElement('iframe'); f.src=c.zdroj; f.allow='autoplay; fullscreen'; f.allowFullscreen=true; f.title=c.nazev;
+      stage.appendChild(f); vinfo.textContent='Oficiální přehrávač provozovatele';
+    }
+    map.panTo(window.innerWidth>900 ? [c.lat,c.lon] : [c.lat-0.03,c.lon]);
+  }
+  function closeViewer(){ exitFs(); stopAll(); current=null; viewer.classList.remove('open'); history.replaceState(null,'',location.pathname);
+    if(active){active.marker.setIcon(icon(active.mode)); active=null;} }
+  close.onclick=closeViewer;
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !document.fullscreenElement){ if(viewer.classList.contains('pseudo-fs')) exitFs(); else closeViewer(); }});
+
+  // Celá obrazovka: Fullscreen API, na iPhonu nativní video, jinak roztažení panelu
+  function exitFs(){ viewer.classList.remove('pseudo-fs'); fs.textContent='⛶ Celá obrazovka'; if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); }
+  function pseudo(){ viewer.classList.add('pseudo-fs'); fs.textContent='✕ Zmenšit'; }
+  fs.onclick=()=>{
+    if(viewer.classList.contains('pseudo-fs')) return exitFs();
+    const v=stage.querySelector('video');
+    if(stage.requestFullscreen) stage.requestFullscreen().catch(pseudo);
+    else if(stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
+    else if(v && v.webkitEnterFullscreen) v.webkitEnterFullscreen();
+    else pseudo();
+  };
+
+  // Přímý odkaz na kameru: index.html#silesnet-rondel
+  if(location.hash){ const c=cams.find(x=>x.id===location.hash.slice(1)); if(c) openCam(c); }
+  window.__cams=cams; window.__open=openCam; window.__close=closeViewer;
+})();
+</script>
+</body>
+</html>
