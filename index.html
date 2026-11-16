@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f1115">
-<title>Kamery Ostravska</title>
+<title>Kamery Česka</title>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
 :root{--bg:#0f1115;--panel:#171a21;--line:#2a2f3a;--text:#e8eaef;--muted:#9aa3b2;--live:#e5484d;--snap:#f5a524;--link:#5b9cff;--acc:#3ecf8e}
@@ -12,6 +12,7 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 #map{position:fixed;inset:0;background:#0b0c0f}
 .leaflet-container{background:#0b0c0f}
+.detail-layer .leaflet-tile{background:#0b0c0f}
 .place-lbl{pointer-events:none;width:0;height:0}
 .place-lbl span{position:absolute;color:#8d96a6;font-size:11px;white-space:nowrap;text-shadow:0 0 3px #0b0c0f,0 0 3px #0b0c0f;transform:translate(-50%,-50%)}
 .place-lbl.city span{font-size:16px;font-weight:700;color:#c9cfda;letter-spacing:.5px}
@@ -71,13 +72,13 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/
 
 <div id="top">
   <div class="card">
-    <div id="brand"><h1>📹 Kamery Ostravska</h1><span class="count" id="count"></span></div>
+    <div id="brand"><h1>📹 Kamery Česka</h1><span class="count" id="count"></span></div>
     <div id="filters">
       <label class="chip"><input type="checkbox" id="fLive" checked><span class="dot live"></span><span class="lbl">Živě</span></label>
       <label class="chip"><input type="checkbox" id="fSnap" checked><span class="dot snap"></span><span class="lbl">Snímky</span></label>
       <label class="chip"><input type="checkbox" id="fLink"><span class="dot link"></span><span class="lbl">Pouze u provozovatele</span></label>
     </div>
-    <input id="search" type="search" placeholder="Hledat město nebo kameru… (např. Havířov)" autocomplete="off" aria-label="Hledat">
+    <input id="search" type="search" placeholder="Hledat město nebo kameru… (např. Havířov, Brno, Sněžka)" autocomplete="off" aria-label="Hledat">
     <div id="results" role="listbox"></div>
   </div>
 </div>
@@ -114,14 +115,16 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/
   const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
 
   // Mapový podklad: vektorové dlaždice OpenStreetMap (OpenMapTiles/OpenFreeMap) uložené v projektu ve složce vt/
-  const map = L.map('map',{zoomControl:false,minZoom:8,maxZoom:17,maxBounds:[[49.3,17.4],[50.2,19.2]],preferCanvas:true}).setView([49.80,18.38],11);
+  const map = L.map('map',{zoomControl:false,minZoom:7,maxZoom:17,maxBounds:[[48.2,11.5],[51.4,19.5]],preferCanvas:true});
+  map.fitBounds([[48.55,12.09],[51.06,18.86]]);
   L.control.zoom({position:'bottomleft'}).addTo(map);
   const S = (o)=>Object.assign({fill:false,weight:1,opacity:1},o);
   const roadW = {motorway:3,trunk:2.6,primary:2.2,secondary:1.8,tertiary:1.4,minor:.8,service:.5};
   const roadC = {motorway:'#c98a3c',trunk:'#b5803e',primary:'#8c7a5a',secondary:'#6d6a60',tertiary:'#5a5d66',minor:'#3b404b',service:'#30343d'};
   const none = [];
-  L.vectorGrid.protobuf('vt/{z}/{x}/{y}.pbf',{
-    maxNativeZoom:14, maxZoom:17, minZoom:8, interactive:false, bounds:[[49.50,17.80],[50.02,18.85]],
+  // celá ČR do přiblížení 11, Ostravsko s podrobnostmi až do 14
+  const vgStyle = (extra) => Object.assign({
+    interactive:false,
     attribution:'© <a href="https://www.openstreetmap.org/copyright">přispěvatelé OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a> · <a href="https://openmaptiles.org">OpenMapTiles</a>',
     vectorTileLayerStyles:{
       water: S({fill:true,fillColor:'#16324a',fillOpacity:1,color:'#16324a',weight:0}),
@@ -138,13 +141,15 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/
       water_name:none, transportation_name:none, place:none, housenumber:none, poi:none, mountain_peak:none,
       aerodrome_label:none, landuse_overlay:none, park_name:none
     }
-  }).addTo(map);
+  }, extra);
+  L.vectorGrid.protobuf('vt/{z}/{x}/{y}.pbf', vgStyle({maxNativeZoom:11, maxZoom:17, minZoom:5, bounds:[[48.5,12.0],[51.12,18.95]]})).addTo(map);
+  L.vectorGrid.protobuf('vt/{z}/{x}/{y}.pbf', vgStyle({maxNativeZoom:14, maxZoom:17, minZoom:12, bounds:[[49.62,17.85],[50.02,18.70]], className:'detail-layer', attribution:''})).addTo(map);
   // Názvy obcí a městských částí (mista.json – výtah z téhož podkladu)
   const mista = await fetch('mista.json').then(r=>r.json());
   const lblLayers = {city:L.layerGroup(), town:L.layerGroup(), village:L.layerGroup(), suburb:L.layerGroup(), quarter:L.layerGroup()};
   mista.forEach(m=> L.marker([m.lat,m.lon],{interactive:false,keyboard:false,
     icon:L.divIcon({className:'place-lbl '+m.c,html:'<span>'+m.n+'</span>',iconSize:null})}).addTo(lblLayers[m.c]));
-  const minZ = {city:8,town:9,village:12,suburb:12,quarter:14};
+  const minZ = {city:7,town:10,village:12,suburb:12,quarter:14};
   function lbl(){ const z=map.getZoom(); for(const k in lblLayers){ z>=minZ[k] ? lblLayers[k].addTo(map) : map.removeLayer(lblLayers[k]); } }
   map.on('zoomend',lbl); lbl();
 
@@ -168,7 +173,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/
   function renderResults(){
     const q = norm(search.value.trim());
     if(!q){ results.classList.remove('show'); results.innerHTML=''; return; }
-    const hits = cams.filter(c=>norm([c.nazev,c.mesto,c.cast,c.kategorie,c.provozovatel].join(' ')).includes(q)).slice(0,30);
+    const hits = cams.filter(c=>norm([c.nazev,c.mesto,c.cast,c.kraj,c.kategorie,c.provozovatel].join(' ')).includes(q)).slice(0,30);
     results.innerHTML = hits.length ? hits.map(c=>`<div class="res" tabindex="0" data-id="${c.id}"><span class="dot ${c.mode}"></span><div>${c.nazev}<small>${c.mesto}${c.cast?' – '+c.cast:''} · ${c.provozovatel}</small></div></div>`).join('')
       : '<div class="res" style="cursor:default">Nic nenalezeno</div>';
     results.classList.add('show');
